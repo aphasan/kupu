@@ -1,11 +1,7 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package id.my.mdn.kupu.core.security.service;
 
 import id.my.mdn.kupu.core.security.dao.ApplicationSecurityGroupFacade;
+import id.my.mdn.kupu.core.security.mechanism.CustomFormAuthenticationMechanism;
 import jakarta.enterprise.context.RequestScoped;
 import jakarta.faces.application.FacesMessage;
 import jakarta.faces.context.ExternalContext;
@@ -19,20 +15,17 @@ import jakarta.security.enterprise.credential.UsernamePasswordCredential;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
 import jakarta.validation.constraints.NotNull;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-/**
- *
- * @author aphasan
- */
 @Named(value = "loginPage")
 @RequestScoped
 public class LoginPage implements Serializable {
-    
+
     private static final Logger Log = Logger.getLogger(LoginPage.class.getCanonicalName());
 
     @NotNull
@@ -49,7 +42,7 @@ public class LoginPage implements Serializable {
 
     @Inject
     private FacesContext facesContext;
-    
+
     @Inject
     private ApplicationSecurityGroupFacade groupFacade;
 
@@ -73,7 +66,20 @@ public class LoginPage implements Serializable {
                 break;
             case SUCCESS: {
                 try {
-                    externalContext.redirect("/");
+                    // Try to restore saved request (if present)
+                    HttpSession session = request.getSession(false);
+                    if (session != null) {
+                        Object saved = session.getAttribute(CustomFormAuthenticationMechanism.SAVED_REQUEST);
+                        if (saved instanceof String) {
+                            String savedUrl = (String) saved;
+                            // remove saved request after consuming
+                            session.removeAttribute(CustomFormAuthenticationMechanism.SAVED_REQUEST);
+                            externalContext.redirect(savedUrl.startsWith("/") ? savedUrl : request.getContextPath() + savedUrl);
+                            break;
+                        }
+                    }
+                    // default landing if no saved request
+                    externalContext.redirect(request.getContextPath() + "/");
                     break;
                 } catch (IOException ex) {
                     Logger.getLogger(LoginPage.class.getName()).log(Level.SEVERE, null, ex);
@@ -102,7 +108,7 @@ public class LoginPage implements Serializable {
                         new UsernamePasswordCredential(username, password)
                 )
         );
-                
+
         return authenticationStatus;
     }
 
